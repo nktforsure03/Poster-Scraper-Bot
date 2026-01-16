@@ -2,7 +2,9 @@ import os
 import asyncio
 from datetime import datetime
 from logging import Formatter
+from threading import Thread
 
+from flask import Flask
 from pytz import timezone as tz
 from pyrogram import idle
 
@@ -12,12 +14,24 @@ from .core.EchoClient import EchoBot
 from .core.plugs import add_plugs
 from .helper.utils.db import database
 from .helper.utils.bot_cmds import _get_bot_commands
-try:
-    from web import _start_web, _ping
-    WEB_OK = True
-except ImportError:
-    WEB_OK = False
 
+# --- STICKY WEB SERVER FOR RENDER ---
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "Bot is alive and running!", 200
+
+def run_web_server():
+    # Render uses the 'PORT' environment variable
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def start_keep_alive():
+    t = Thread(target=run_web_server)
+    t.daemon = True
+    t.start()
+# ------------------------------------
 
 def main():
     def changetz(*args):
@@ -56,12 +70,9 @@ def main():
 
     add_plugs()
     
-    if Config.WEB_SERVER and WEB_OK:
-        LOGGER.info("Starting web server...")
-        asyncio.create_task(_start_web())
-        asyncio.create_task(_ping(Config.PING_URL, Config.PING_TIME))
-    else:
-        LOGGER.info("Web server disabled")
+    # Start the web server automatically for Render
+    LOGGER.info("Starting Render Keep-Alive Web Server...")
+    start_keep_alive()
     
     idle()
 
